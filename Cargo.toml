@@ -1,0 +1,10 @@
+[package]
+name = "vmstat"
+version = "1.0.0"
+authors = ["wabuntu <XXXX@XXX.com>"]
+edition = "2021"
+
+[dependencies]
+ssh2 = "0.9.4"
+openssl-sys = "0.9"
+openssl = "0.10"
