@@ -65,40 +65,7 @@ fn main() {
                             &host,
                             "sudo virsh domstats --cpu-total --balloon --interface --block \
                             | grep -e Domain: -e cpu.time -e balloon -e bytes -e allocation -e capacity");
-    //print_table_top();
 
-/* Sample output
-Domain: 'vm-001'
-  cpu.time=287227998002
-  cpu.user=3420000000
-  cpu.system=47170000000
-  balloon.current=16777216
-  balloon.maximum=16777216
-  net.count=1
-  net.0.name=tap503eedb1-62
-  net.0.rx.bytes=205574278751191
-  net.0.rx.pkts=21214611866
-  net.0.rx.errs=0
-  net.0.rx.drop=580571
-  net.0.tx.bytes=16044063043681
-  net.0.tx.pkts=19474726360
-  net.0.tx.errs=0
-  net.0.tx.drop=0
-  block.count=6
-  block.0.name=vda
-  block.0.path=/dev/drbd1021
-  block.0.rd.reqs=1222644
-  block.0.rd.bytes=22719836672
-  block.0.rd.times=995287307927
-  block.0.wr.reqs=56389817
-  block.0.wr.bytes=1167926535168
-  block.0.wr.times=190253961087617
-  block.0.fl.reqs=4379880
-  block.0.fl.times=374942116357
-  block.0.allocation=21478596608
-  block.0.capacity=21478596608
-  block.0.physical=21478596608
-*/
 
     let mut index = 0;
     let mut cpu_top: i64 = 0;
