@@ -7,6 +7,11 @@ on:
   release:
     types: [created]
 
+permissions:
+  actions: write
+  checks: write
+  contents: write
+
 jobs:
   release:
     name: release ${{ matrix.target }}
