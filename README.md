@@ -1,5 +1,6 @@
 # vmstat
 Collects stat infomation from virsh. Mainly for OpenStack admin.
+Binaries here https://github.com/wabuntu/vmstat/tree/main/output
 
 ## sample
 
