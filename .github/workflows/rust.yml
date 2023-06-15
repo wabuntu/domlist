@@ -1,4 +1,5 @@
 name: Rust
+# https://github.com/rust-build/rust-build.action
 
 on:
   push:
@@ -23,3 +24,11 @@ jobs:
         with:
           RUSTTARGET: ${{ matrix.target }}
           EXTRA_FILES: "README.md LICENSE"
+  upload:    
+    name: Publish package
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git add -f *.zip
+        git commit -m 'uploading binaries'
+        git push          
