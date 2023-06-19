@@ -1,37 +1,15 @@
 use ssh2::Session;
-use std::io::{Read};
 use std::env;
+use std::io::Read;
 use std::net::TcpStream;
 // use std::thread;
 // use tokio::time;
-#[macro_use] extern crate prettytable;
-use prettytable::{Table};
+#[macro_use]
+extern crate prettytable;
 use prettytable::format;
-use prettytable::{Attr, color};
+use prettytable::Table;
+use prettytable::{color, Attr};
 // use colored::Colorize;
-
-
-fn run_ssh(user: &str, host: &str, cmd: &str) -> String {
-
-    let tcp = TcpStream::connect(host).expect("Failed to connect");
-    let mut ssn = Session::new().expect("Failed to create a new session");
-    ssn.set_tcp_stream(tcp);
-    ssn.handshake().expect("Failed at TCP handshake");
-    ssn.userauth_agent(user).expect("Failed to have user auth agent");
-    assert!(ssn.authenticated());
-
-    let mut channel = ssn.channel_session().expect("Failed to create a channel");
-    channel.exec(cmd).expect("Failed to run command through SSH");
-    let mut result = String::new();
-    channel.read_to_string(&mut result).expect("Failed to read the result");
-
-//    channel.send_eof().expect("Failed to send EOF");
-//    channel.wait_eof().unwrap();
-//    channel.close().expect("Failed to close");
-//    channel.wait_close().unwrap();
-
-    return result;
-}
 
 struct VMStats {
     domain: String,
@@ -44,10 +22,36 @@ struct VMStats {
     allocation: i64,
     capacity: i64,
 }
-fn main() {
 
-    const GIGA : i64 = 1000000000;
-    const MEGA : i64 = 1000000;
+fn run_ssh(user: &str, host: &str, cmd: &str) -> String {
+    let tcp = TcpStream::connect(host).expect("Failed to connect");
+    let mut ssn = Session::new().expect("Failed to create a new session");
+    ssn.set_tcp_stream(tcp);
+    ssn.handshake().expect("Failed at TCP handshake");
+    ssn.userauth_agent(user)
+        .expect("Failed to have user auth agent");
+    assert!(ssn.authenticated());
+
+    let mut channel = ssn.channel_session().expect("Failed to create a channel");
+    channel
+        .exec(cmd)
+        .expect("Failed to run command through SSH");
+    let mut result = String::new();
+    channel
+        .read_to_string(&mut result)
+        .expect("Failed to read the result");
+
+    //    channel.send_eof().expect("Failed to send EOF");
+    //    channel.wait_eof().unwrap();
+    //    channel.close().expect("Failed to close");
+    //    channel.wait_close().unwrap();
+
+    return result;
+}
+
+fn main() {
+    const GIGA: i64 = 1000000000;
+    const MEGA: i64 = 1000000;
     let mut vmstats_list: Vec<VMStats> = vec![];
 
     // Get target node and user
@@ -66,14 +70,11 @@ fn main() {
                             "sudo virsh domstats --cpu-total --balloon --interface --block \
                             | grep -e Domain: -e cpu.time -e balloon -e bytes -e allocation -e capacity");
 
-
     let mut index = 0;
     let mut cpu_top: i64 = 0;
     let mut io_top: i64 = 0;
     let mut net_top: i64 = 0;
-    let mut cpu_2nd: i64 = 0;
-    let mut io_2nd: i64 = 0;
-    let mut net_2nd: i64 = 0;
+    let mut domain_list: String = "".to_string();
 
     // Collect status from each domain(instance)
     for buff in domstats.lines() {
@@ -81,18 +82,21 @@ fn main() {
 
         // Ask instance name if line contains domain name
         if line.contains("Domain: ") {
-            let domain :Vec<&str> = line.split('\'').collect();
-            let vmstats = VMStats{ domain: domain[1].to_string(),
-                                            instance: "".to_string(),
-                                            cpu: 0,
-                                            mem_cur: 0,
-                                            mem_max: 0,
-                                            io: 0,
-                                            net: 0,
-                                            allocation: 0,
-                                            capacity: 0 };
+            let domain: Vec<&str> = line.split('\'').collect();
+            let vmstats = VMStats {
+                domain: domain[1].to_string(),
+                instance: "".to_string(),
+                cpu: 0,
+                mem_cur: 0,
+                mem_max: 0,
+                io: 0,
+                net: 0,
+                allocation: 0,
+                capacity: 0,
+            };
             vmstats_list.push(vmstats);
-            index = vmstats_list.len()-1;
+            index = vmstats_list.len() - 1;
+            domain_list += format!(" {}", domain[1]).as_str();
             continue;
         }
 
@@ -105,57 +109,39 @@ fn main() {
             "cpu" => {
                 if *key.last().unwrap() == "time" {
                     vmstats_list[index].cpu = value;
-                    if vmstats_list[index].cpu > cpu_top {
-                        cpu_2nd = cpu_top;
-                        cpu_top = vmstats_list[index].cpu
-                    };
                 }
+            }
+            "balloon" => match *key.last().unwrap() {
+                "current" => vmstats_list[index].mem_cur = value,
+                "maximum" => vmstats_list[index].mem_max = value,
+                _ => (),
             },
-            "balloon" => {
-                match *key.last().unwrap() {
-                    "current" => vmstats_list[index].mem_cur = value,
-                    "maximum" => vmstats_list[index].mem_max = value,
-                    _ => (),
-                }
-            },
-            "block" => {
-                match *key.last().unwrap() {
-                    "bytes" => vmstats_list[index].io += value,
-                    "allocation" => vmstats_list[index].allocation = value,
-                    "capacity" => vmstats_list[index].capacity = value,
-                    _ => (),
-                }
-                if vmstats_list[index].io > io_top {
-                    io_2nd = io_top;
-                    io_top = vmstats_list[index].io
-                };
+            "block" => match *key.last().unwrap() {
+                "bytes" => vmstats_list[index].io += value,
+                "allocation" => vmstats_list[index].allocation = value,
+                "capacity" => vmstats_list[index].capacity = value,
+                _ => (),
             },
             "net" => {
                 if *key.last().unwrap() == "bytes" {
                     vmstats_list[index].net += value;
-                    if vmstats_list[index].net > net_top {
-                        net_2nd = net_top;
-                        net_top = vmstats_list[index].net
-                    };
                 }
-            },
+            }
             _ => (),
         }
     }
 
     // Get instance name from domain name
-    let mut domain_list: String = "".to_string();
-    for vmstats in &vmstats_list {
-        domain_list += format!(" {}", vmstats.domain).as_str();
-    }
-    let cmd: String = format!("{} {} {} {} {} {}",
-                                "for DOMAIN in",
-                                domain_list,
-                                "; do ",
-                                "sudo virsh dumpxml ${DOMAIN}",
-                                "| grep nova:name | sed -r 's/<nova:name>(.*)<\\/nova:name>/\\1/';",
-                                "done;");
-    let instances = run_ssh( user.as_str(), host.as_str(), &cmd);
+    let cmd: String = format!(
+        "{} {} {} {} {} {}",
+        "for DOMAIN in",
+        domain_list,
+        "; do ",
+        "sudo virsh dumpxml ${DOMAIN}",
+        "| grep nova:name | sed -r 's/<nova:name>(.*)<\\/nova:name>/\\1/';",
+        "done;"
+    );
+    let instances = run_ssh(user.as_str(), host.as_str(), &cmd);
     let mut index = 0;
     for instance in instances.lines() {
         let instance = instance.trim();
@@ -164,22 +150,24 @@ fn main() {
     }
 
     //for index in 0..vmstats_list.len() {
-        //dbg!(index);
-        //thread::scope(|thread_ssh| {
-            //thread_ssh.spawn(|| {
-        //async {
-            //dbg!(index);
+    //dbg!(index);
+    //thread::scope(|thread_ssh| {
+    //thread_ssh.spawn(|| {
+    //async {
+    //dbg!(index);
 
-            //dbg!(index);
-        //}.await;
-            //});
-        //});
+    //dbg!(index);
+    //}.await;
+    //});
+    //});
     //}
 
     // Print table
     let mut table = Table::new();
     table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-    table.set_titles(row![bc => "Domain", "Instance", "CPU(G)", "MEM(G)", "I/O(G)","NET(G)", "Disk(G)"]);
+    table.set_titles(
+        row![bc => "Domain", "Instance", "CPU(G)", "MEM(G)", "I/O(G)","NET(G)", "Disk(G)"],
+    );
     for vmstats in &vmstats_list {
         table.add_row(row![
             vmstats.domain,
@@ -190,34 +178,33 @@ fn main() {
             r->(vmstats.net/GIGA).to_string(),
             r->format!("{}/{}", (vmstats.allocation/GIGA).to_string(),(vmstats.capacity/GIGA).to_string()),
         ]);
+
+        // Make ranking
+        if vmstats.cpu > cpu_top {
+            cpu_top = vmstats.cpu
+        };
+        if vmstats.io > io_top {
+            io_top = vmstats.io
+        };
+        if vmstats.net > net_top {
+            net_top = vmstats.net
+        };
     }
 
-println!("io_second: {}", io_2nd);
-
     table.column_iter_mut(2).for_each(|column| {
-        if column.get_content() == (cpu_2nd/GIGA).to_string() {
-            column.style(Attr::ForegroundColor(color::YELLOW));
-        }
-        if column.get_content() == (cpu_top/GIGA).to_string() {
+        if column.get_content() == (cpu_top / GIGA).to_string() {
             column.style(Attr::ForegroundColor(color::RED));
         }
     });
     table.column_iter_mut(4).for_each(|column| {
-        if column.get_content() == (io_2nd/GIGA).to_string() {
-            column.style(Attr::ForegroundColor(color::YELLOW));
-        }
-        if column.get_content() == (io_top/GIGA).to_string() {
+        if column.get_content() == (io_top / GIGA).to_string() {
             column.style(Attr::ForegroundColor(color::RED));
         }
     });
     table.column_iter_mut(5).for_each(|column| {
-        if column.get_content() == (net_2nd/GIGA).to_string() {
-            column.style(Attr::ForegroundColor(color::YELLOW));
-        }
-        if column.get_content() == (net_top/GIGA).to_string() {
+        if column.get_content() == (net_top / GIGA).to_string() {
             column.style(Attr::ForegroundColor(color::RED));
         }
     });
     table.printstd();
-
 }
