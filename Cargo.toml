@@ -1,9 +1,10 @@
 [package]
 name = "vmstat"
-version = "1.5.0"
+version = "1.6.0"
 authors = ["wabuntu <XXXX@XXX.com>"]
 edition = "2021"
 
 [dependencies]
 ssh2 = "0.9.4"
 prettytable-rs = "^0.10"
+clap = { version = "4.3.4", features = ["derive"] }
