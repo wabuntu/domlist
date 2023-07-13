@@ -1,16 +1,27 @@
+//! vmstat
+/*
+TODO: forllow this guide
+https://github.com/rust-lang/style-team/blob/master/guide/guide.md
+*/
+
+use clap::Parser;
 use ssh2::Session;
 use std::env;
 use std::io::Read;
 use std::net::TcpStream;
-// use std::thread;
-// use tokio::time;
 #[macro_use]
 extern crate prettytable;
 use prettytable::format;
 use prettytable::Table;
 use prettytable::{color, Attr};
-// use colored::Colorize;
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(value_name = "host", help = "Target compute node name, or IP address")]
+    pos_arg: String,
+}
+
+/// Status information set for each virsh domain
 struct VMStats {
     domain: String,
     instance: String,
@@ -23,6 +34,7 @@ struct VMStats {
     capacity: i64,
 }
 
+/// SSH sender impletemted with SSH2
 fn run_ssh(user: &str, host: &str, cmd: &str) -> String {
     let tcp = TcpStream::connect(host).expect("Failed to connect");
     let mut ssn = Session::new().expect("Failed to create a new session");
@@ -40,12 +52,6 @@ fn run_ssh(user: &str, host: &str, cmd: &str) -> String {
     channel
         .read_to_string(&mut result)
         .expect("Failed to read the result");
-
-    //    channel.send_eof().expect("Failed to send EOF");
-    //    channel.wait_eof().unwrap();
-    //    channel.close().expect("Failed to close");
-    //    channel.wait_close().unwrap();
-
     return result;
 }
 
@@ -54,14 +60,9 @@ fn main() {
     const MEGA: i64 = 1000000;
     let mut vmstats_list: Vec<VMStats> = vec![];
 
-    // Get target node and user
-    // TODO Use Clap crate
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
-        println!("Target node is required.");
-        return;
-    }
-    let host: String = format!("{}:22", args[1]);
+    // Get target node, port, user
+    let args = Args::parse();
+    let host: String = format!("{}:22", args.pos_arg);
     let user: String = env::var("USER").expect("$USER is not set");
 
     // Run 'virsh domstats' in target node
@@ -100,11 +101,12 @@ fn main() {
             continue;
         }
 
+        // Sprit A.B.C=xxxx
         let keyvalue: Vec<&str> = line.split('=').collect();
         let key: Vec<&str> = keyvalue[0].split('.').collect();
         let value = keyvalue[1].parse::<i64>().unwrap();
 
-        // Collect data for cpu, block, net
+        // Collect data for cpu, memory, block, net
         match key[0] {
             "cpu" => {
                 if *key.last().unwrap() == "time" {
@@ -149,19 +151,6 @@ fn main() {
         index += 1;
     }
 
-    //for index in 0..vmstats_list.len() {
-    //dbg!(index);
-    //thread::scope(|thread_ssh| {
-    //thread_ssh.spawn(|| {
-    //async {
-    //dbg!(index);
-
-    //dbg!(index);
-    //}.await;
-    //});
-    //});
-    //}
-
     // Print table
     let mut table = Table::new();
     table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
@@ -179,7 +168,7 @@ fn main() {
             r->format!("{}/{}", (vmstats.allocation/GIGA).to_string(),(vmstats.capacity/GIGA).to_string()),
         ]);
 
-        // Make ranking
+        // Record top resource consumer
         if vmstats.cpu > cpu_top {
             cpu_top = vmstats.cpu
         };
@@ -191,6 +180,7 @@ fn main() {
         };
     }
 
+    // Coloring red for top resource comsumer
     table.column_iter_mut(2).for_each(|column| {
         if column.get_content() == (cpu_top / GIGA).to_string() {
             column.style(Attr::ForegroundColor(color::RED));
