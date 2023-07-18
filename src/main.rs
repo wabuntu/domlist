@@ -1,7 +1,7 @@
-//! vmstat
-//! # vmstat
+//! domlist
+//! # domlist
 //!
-//! Vmstat collects stat infomation from virsh. Mainly for OpenStack admin.
+//! domlist collects stat infomation from virsh. Mainly for OpenStack admin.
 
 
 /*
