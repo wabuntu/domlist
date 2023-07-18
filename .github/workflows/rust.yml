@@ -1,56 +1,86 @@
-name: Rust
-# https://github.com/rust-build/rust-build.action
+
+name: Main
 
 on:
   push:
-    branches: [ "main" ]
-  release:
-    types: [created]
 
-permissions:
-  actions: write
-  checks: write
-  contents: write
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  release:
-    name: release ${{ matrix.target }}
-    runs-on: ubuntu-latest
+  build-test:
+    name: Build and test (${{ matrix.os }})
+
     strategy:
-      fail-fast: false
       matrix:
-        include:
-          - target: x86_64-pc-windows-gnu
-            archive: zip
-          - target: x86_64-unknown-linux-musl
-            archive: tar.gz
-          - target: x86_64-apple-darwin
-            archive: zip
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
     steps:
-      - uses: actions/checkout@master
-      - name: Compile and release
-        uses: rust-build/rust-build.action@v1.4.3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          RUSTTARGET: ${{ matrix.target }}
-          ARCHIVE_TYPES: ${{ matrix.archive }}
-   
-      - name: Publish package
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add -f *.zip
-          git add -f *.tar.gz          
-          git commit -m 'uploading binaries'
-          git push
-          
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: swatinem/rust-cache@v2
+      - name: Build
+        run: >
+          cargo build
+          --locked
+          --verbose
+
+      - name: Run tests (without coverage)
+        if: matrix.os != 'ubuntu-latest'
+        run: >
+          cargo test
+          --verbose
+
+      - name: Run tests (with coverage)
+        if: matrix.os == 'ubuntu-latest'
+        run: >
+          cargo install cargo-tarpaulin
+          && cargo tarpaulin
+          --verbose
+          --out Xml
+          --engine llvm
+          --skip-clean
+      - name: Upload coverage reports to Codecov
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v3
+
+  release-please:
+    name: Execute release chores
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    runs-on: ubuntu-latest
+    needs: build-test
+
+    outputs:
+      created: ${{ steps.release.outputs.release_created }}
+
+    steps:
+      - uses: google-github-actions/release-please-action@v3
+        id: release
         with:
-          toolchain: stable
-          override: true
-      - uses: katyo/publish-crates@v2
-        with:
-          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          ignore-unpublished-changes: true
+          release-type: rust
+
+  publish:
+    name: Publish to crates.io
+
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: needs.release-please.outputs.created
+
+    environment: crates.io
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: swatinem/rust-cache@v2
+
+      - name: Publish
+      # https://doc.rust-lang.org/cargo/reference/config.html?highlight=CARGO_REGISTRY_TOKEN#credentials
+        run: >
+          cargo publish
+          --verbose
+          --locked
+          --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
