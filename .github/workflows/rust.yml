@@ -4,6 +4,11 @@ name: Main
 on:
   push:
 
+permissions:
+  actions: write
+  checks: write
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -41,6 +46,7 @@ jobs:
           --out Xml
           --engine llvm
           --skip-clean
+          
       - name: Upload coverage reports to Codecov
         if: matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v3
