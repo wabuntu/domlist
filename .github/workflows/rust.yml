@@ -23,7 +23,7 @@ jobs:
       - name: Build
         run: >
           cargo build
-          --locked
+          # --locked
           --verbose
 
       - name: Run tests (without coverage)
