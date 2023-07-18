@@ -1,4 +1,4 @@
-# vmstat
+# domlist
 Collects stat infomation from virsh. Mainly for OpenStack admin.
 
 Binaries here https://github.com/wabuntu/vmstat/tree/main/output.
@@ -6,7 +6,7 @@ Binaries here https://github.com/wabuntu/vmstat/tree/main/output.
 ## sample
 
 ```
-$ ./vmstat computenode01.example.com
+$ ./domlist computenode01.example.com
 +--------------------+-------------------------------------------+---------+--------+--------+--------+---------+
 |       Domain       |                 Instance                  | CPU(G)  | MEM(G) | I/O(G) | NET(G) | Disk(G) |
 +--------------------+-------------------------------------------+---------+--------+--------+--------+---------+
