@@ -63,7 +63,7 @@ jobs:
         id: release
         with:
           release-type: rust
-          repo-token: ${{ secrets.GIHHAB }}
+        token: ${{ secrets.GIHHAB }}
 
   publish:
     name: Publish to crates.io
