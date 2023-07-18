@@ -1,4 +1,9 @@
 //! vmstat
+//! # vmstat
+//!
+//! Vmstat collects stat infomation from virsh. Mainly for OpenStack admin.
+
+
 /*
 TODO: forllow this guide
 https://github.com/rust-lang/style-team/blob/master/guide/guide.md
