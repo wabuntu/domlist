@@ -45,6 +45,23 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v3
 
+      - uses: actions/checkout@master
+      - name: Compile and release
+        uses: rust-build/rust-build.action@v1.4.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          RUSTTARGET: ${{ matrix.target }}
+          ARCHIVE_TYPES: zip
+   
+      - name: Publish package
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add -f *        
+          git commit -m 'uploading binaries'
+          git push
+
   release-please:
     name: Execute release chores
 
