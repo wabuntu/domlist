@@ -3,6 +3,8 @@ name = "vmstat"
 version = "1.6.0"
 authors = ["wabuntu <XXXX@XXX.com>"]
 edition = "2021"
+description = "Collects stat infomation from virsh. Mainly for OpenStack admin."
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 ssh2 = "0.9.4"
