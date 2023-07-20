@@ -15,16 +15,11 @@ env:
 jobs:
   build-test:
     name: Build and test (${{ matrix.os }})
-
     strategy:
       matrix:
         os: [ubuntu-latest]
         # os: [ubuntu-latest, macos-latest, windows-latest]
-        
     runs-on: ${{ matrix.os }}
-
-        env:
-          GITHUB_TOKEN: ${{ secrets.GIHHAB }}
 
     steps:
       - uses: actions/checkout@v3
