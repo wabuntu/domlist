@@ -31,7 +31,6 @@ jobs:
           cargo build
           --release
           --verbose
-          --out-dir matrix.os
           # --locked       
 
       - name: Run tests (without coverage)
