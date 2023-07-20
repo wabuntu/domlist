@@ -58,7 +58,7 @@ jobs:
           git add -f ${{ matrix.os }}/release/domlist
           git commit -m 'uploading binaries'
           git push
-          # git pull
+          git pull
 
   release-please:
     name: Execute release chores
