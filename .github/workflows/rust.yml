@@ -17,8 +17,7 @@ jobs:
     name: Build and test (${{ matrix.os }})
     strategy:
       matrix:
-        os: [ubuntu-latest]
-        # os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -56,7 +55,7 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add -f *
+          git add -f ${{ matrix.os }}/release/domlist
           git commit -m 'uploading binaries'
           git push
           # git pull
