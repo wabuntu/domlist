@@ -23,6 +23,9 @@ jobs:
         
     runs-on: ${{ matrix.os }}
 
+        env:
+          GITHUB_TOKEN: ${{ secrets.GIHHAB }}
+
     steps:
       - uses: actions/checkout@v3
       - uses: swatinem/rust-cache@v2
@@ -30,8 +33,9 @@ jobs:
         run: >
           cargo build
           --release
-          --verbose
-          # --locked       
+          --verbose    
+        env:
+          CARGO_TARGET_DIR: ${{ matrix.os }}
 
       - name: Run tests (without coverage)
         if: matrix.os != 'ubuntu-latest'
@@ -57,7 +61,7 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add -f target/release/domlist
+          git add -f *
           git commit -m 'uploading binaries'
           git push
           # git pull
