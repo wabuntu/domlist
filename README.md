@@ -3,6 +3,13 @@ Collects stat infomation from virsh. Mainly for OpenStack admin.
 
 You can download single binary from [here](https://github.com/wabuntu/domlist/tree/main/binaries) for each operationg system.
 
+Please have your ssh-agent ready before you run.
+
+```
+$ eval `ssh-agent`
+$ ssh-add .ssh/id_rsa
+```
+
 ## sample
 
 ```
