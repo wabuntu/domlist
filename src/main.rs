@@ -3,7 +3,6 @@
 //!
 //! domlist collects stat infomation from virsh. Mainly for OpenStack admin.
 
-
 /*
 TODO: forllow this guide
 https://github.com/rust-lang/style-team/blob/master/guide/guide.md
@@ -70,10 +69,9 @@ fn run_ssh(user: &str, host: &str, cmd: &str) -> String {
 
 // Run command in local
 fn run_command(cmd: &str) -> String {
-
     let output = Command::new(cmd)
-                                    .output()
-                                    .expect("failed to execute process");
+        .output()
+        .expect("failed to execute process");
     // println!("status: {}", output.status);
     // println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
     // println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
@@ -90,31 +88,35 @@ fn main() {
 
     // Get target node, port, user
     let args = Args::parse();
-    remote_mode = if args.host != None {true} else {false};
+    remote_mode = if args.host != None { true } else { false };
     let host: String = args.host.clone().unwrap_or(String::from("")) + ":22";
-    let user: String = if remote_mode {env::var("USER").expect("$USER is not set")} else {String::from("")};
-    println!(r"Connecting... : {}@{}", user, host);
+    let user: String = if remote_mode {
+        env::var("USER").expect("$USER is not set")
+    } else {
+        String::from("")
+    };
+    //println!(r"Connecting... : {}@{}", user, host);
 
     // Run 'virsh domstats' in target node
+    let mut cmd: String = format!(
+        "{} {} {}",
+        "sudo /usr/bin/virsh domstats",
+        "--cpu-total --balloon --interface --block",
+        "| grep -e Domain: -e cpu.time -e balloon -e bytes -e allocation -e capacity"
+    );
     let domstats: String = if remote_mode {
-                            run_ssh( &user, &host,
-                                "sudo virsh domstats --cpu-total --balloon --interface --block \
-                                | grep -e Domain: -e cpu.time -e balloon -e bytes -e allocation -e capacity")
-                        } else {
-                            run_command("sudo virsh domstats --cpu-total --balloon --interface --block \
-                                | grep -e Domain: -e cpu.time -e balloon -e bytes -e allocation -e capacity")
-                        };
+        run_ssh( &user, &host, &cmd)
+    } else {
+        run_command(&cmd)
+    };
     let mut index = 0;
-    let mut cpu_top: i64 = 0;
-    let mut io_top: i64 = 0;
-    let mut net_top: i64 = 0;
     let mut domain_list: String = "".to_string();
 
     // Collect status from each domain(instance)
     for buff in domstats.lines() {
         let line = buff.trim();
 
-        // Ask instance name if line contains domain name
+        // Extract domain name from virsh command result
         if line.contains("Domain: ") {
             let domain: Vec<&str> = line.split('\'').collect();
             let vmstats = VMStats {
@@ -167,20 +169,20 @@ fn main() {
     }
 
     // Get instance name from domain name
-    let cmd: String = format!(
+    cmd = format!(
         "{} {} {} {} {} {}",
         "for DOMAIN in",
         domain_list,
         "; do ",
-        "sudo virsh dumpxml ${DOMAIN}",
+        "sudo /usr/bin/virsh dumpxml ${DOMAIN}",
         "| grep nova:name | sed -r 's/<nova:name>(.*)<\\/nova:name>/\\1/';",
         "done;"
     );
     let instances = if remote_mode {
-                        run_ssh(user.as_str(), host.as_str(), &cmd)
-                    } else {
-                        run_command(&cmd)
-                    };
+        run_ssh(user.as_str(), host.as_str(), &cmd)
+    } else {
+        run_command(&cmd)
+    };
     let mut index = 0;
     for instance in instances.lines() {
         let instance = instance.trim();
@@ -194,6 +196,12 @@ fn main() {
     table.set_titles(
         row![bc => "Domain", "Instance", "CPU(G)", "MEM(G)", "I/O(G)","NET(G)", "Disk(G)"],
     );
+
+    let mut cpu_top: i64 = 0;
+    let mut io_top: i64 = 0;
+    let mut net_top: i64 = 0;
+
+    // Adding table row
     for vmstats in &vmstats_list {
         table.add_row(row![
             vmstats.domain,
