@@ -69,13 +69,15 @@ fn run_ssh(user: &str, host: &str, cmd: &str) -> String {
 
 // Run command in local
 fn run_command(cmd: &str) -> String {
-    let output = Command::new(cmd)
+    let command_array: Vec<&str> = cmd.split_whitespace().collect();
+    let output = Command::new(&command_array[0])
+        .args(&command_array[1..])
         .output()
-        .expect("failed to execute process");
+        .expect(&format!("failed to execute process '{}'", cmd));
     // println!("status: {}", output.status);
     // println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
     // println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
-    assert!(output.status.success());
+    assert!(output.status.success(), "failed to execute process '{}'", cmd);
 
     return String::from_utf8_lossy(&output.stdout).to_string();
 }
@@ -100,7 +102,7 @@ fn main() {
     // Run 'virsh domstats' in target node
     let mut cmd: String = format!(
         "{} {} {}",
-        "sudo /usr/bin/virsh domstats",
+        "sudo virsh domstats",
         "--cpu-total --balloon --interface --block",
         "| grep -e Domain: -e cpu.time -e balloon -e bytes -e allocation -e capacity"
     );
@@ -174,7 +176,7 @@ fn main() {
         "for DOMAIN in",
         domain_list,
         "; do ",
-        "sudo /usr/bin/virsh dumpxml ${DOMAIN}",
+        "sudo virsh dumpxml ${DOMAIN}",
         "| grep nova:name | sed -r 's/<nova:name>(.*)<\\/nova:name>/\\1/';",
         "done;"
     );
