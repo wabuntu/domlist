@@ -74,10 +74,10 @@ fn run_command(cmd: &str) -> String {
         .args(&command_array[1..])
         .output()
         .expect(&format!("failed to execute process '{}'", cmd));
-    // println!("status: {}", output.status);
+    println!("status: {}", output.status);
     // println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-    // println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
-    assert!(output.status.success(), "failed to execute process '{}'", cmd);
+    println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "failed to execute process '{}'", &command_array[0]);
 
     return String::from_utf8_lossy(&output.stdout).to_string();
 }
