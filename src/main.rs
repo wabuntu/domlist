@@ -13,7 +13,7 @@ use ssh2::Session;
 use std::env;
 use std::io::Read;
 use std::net::TcpStream;
-use std::process::Command;
+
 #[macro_use]
 extern crate prettytable;
 use prettytable::format;
@@ -67,50 +67,25 @@ fn run_ssh(user: &str, host: &str, cmd: &str) -> String {
     return result;
 }
 
-// Run command in local
-fn run_command(cmd: &str) -> String {
-    let command_array: Vec<&str> = cmd.split_whitespace().collect();
-    let output = Command::new(&command_array[0])
-        .args(&command_array[1..])
-        .output()
-        .expect(&format!("failed to execute process '{}'", cmd));
-    println!("status: {}", output.status);
-    // println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-    println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
-    assert!(output.status.success(), "failed to execute process '{}'", &command_array[0]);
-
-    return String::from_utf8_lossy(&output.stdout).to_string();
-}
-
 fn main() {
     const GIGA: i64 = 1000000000;
     const MEGA: i64 = 1000000;
     let mut vmstats_list: Vec<VMStats> = vec![];
-    let mut remote_mode: bool = true;
 
     // Get target node, port, user
     let args = Args::parse();
-    remote_mode = if args.host != None { true } else { false };
-    let host: String = args.host.clone().unwrap_or(String::from("")) + ":22";
-    let user: String = if remote_mode {
-        env::var("USER").expect("$USER is not set")
-    } else {
-        String::from("")
-    };
+    let host: String = args.host.clone().unwrap_or(String::from("127.0.0.1")) + ":22";
+    let user: String = env::var("USER").expect("$USER is not set");
     //println!(r"Connecting... : {}@{}", user, host);
 
     // Run 'virsh domstats' in target node
     let mut cmd: String = format!(
         "{} {} {}",
-        "sudo virsh domstats",
+        "virsh domstats",
         "--cpu-total --balloon --interface --block",
         "| grep -e Domain: -e cpu.time -e balloon -e bytes -e allocation -e capacity"
     );
-    let domstats: String = if remote_mode {
-        run_ssh( &user, &host, &cmd)
-    } else {
-        run_command(&cmd)
-    };
+    let domstats: String = run_ssh( &user, &host, &cmd);
     let mut index = 0;
     let mut domain_list: String = "".to_string();
 
@@ -176,15 +151,11 @@ fn main() {
         "for DOMAIN in",
         domain_list,
         "; do ",
-        "sudo virsh dumpxml ${DOMAIN}",
+        "virsh dumpxml ${DOMAIN}",
         "| grep nova:name | sed -r 's/<nova:name>(.*)<\\/nova:name>/\\1/';",
         "done;"
     );
-    let instances = if remote_mode {
-        run_ssh(user.as_str(), host.as_str(), &cmd)
-    } else {
-        run_command(&cmd)
-    };
+    let instances = run_ssh(user.as_str(), host.as_str(), &cmd);
     let mut index = 0;
     for instance in instances.lines() {
         let instance = instance.trim();
