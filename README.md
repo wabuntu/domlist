@@ -1,7 +1,13 @@
 # domlist
 Collects stat infomation from virsh. Mainly for OpenStack admin.
 
-You can download single binary from [here](https://github.com/wabuntu/domlist/tree/main/binaries) for each operationg system.
+## install
+
+- Debian package : [(https://github.com/wabuntu/domlist/tree/main/target/debian)](https://github.com/wabuntu/domlist/tree/main/target/debian)
+- Single binary : [[here](https://github.com/wabuntu/domlist/tree/main/binaries)](https://github.com/wabuntu/domlist/tree/main/binaries)
+- Cargo : 'cargo install domlist' 
+
+# run
 
 Please have your ssh-agent ready before you run.
 
