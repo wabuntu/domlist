@@ -3,9 +3,9 @@ Collects stat infomation from virsh. Mainly for OpenStack admin.
 
 ## install
 
-- Debian package : [(https://github.com/wabuntu/domlist/tree/main/target/debian)](https://github.com/wabuntu/domlist/tree/main/target/debian)
-- Single binary : [[here](https://github.com/wabuntu/domlist/tree/main/binaries)](https://github.com/wabuntu/domlist/tree/main/binaries)
-- Cargo : 'cargo install domlist' 
+- Debian package : https://github.com/wabuntu/domlist/tree/main/target/debian
+- Single binary : https://github.com/wabuntu/domlist/tree/main/binaries
+- Cargo : `cargo install domlist`
 
 # run
 
