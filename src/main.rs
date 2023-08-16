@@ -81,7 +81,7 @@ fn main() {
     // Run 'virsh domstats' in target node
     let mut cmd: String = format!(
         "{} {} {}",
-        "virsh domstats",
+        "sudo virsh domstats",
         "--cpu-total --balloon --interface --block",
         "| grep -e Domain: -e cpu.time -e balloon -e bytes -e allocation -e capacity"
     );
@@ -151,7 +151,7 @@ fn main() {
         "for DOMAIN in",
         domain_list,
         "; do ",
-        "virsh dumpxml ${DOMAIN}",
+        "sudo virsh dumpxml ${DOMAIN}",
         "| grep nova:name | sed -r 's/<nova:name>(.*)<\\/nova:name>/\\1/';",
         "done;"
     );
