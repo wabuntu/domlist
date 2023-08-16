@@ -7,7 +7,7 @@ Please have your ssh-agent ready before you run.
 
 ```
 $ eval `ssh-agent`
-$ ssh-add .ssh/id_rsa
+$ ssh-add ~/.ssh/id_rsa
 ```
 
 ## sample (local)
