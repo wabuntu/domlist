@@ -1,13 +1,13 @@
 # domlist
 Collects stat infomation from virsh. Mainly for OpenStack admin.
 
-## install
+## Install
 
 - Debian package : https://github.com/wabuntu/domlist/tree/main/target/debian
 - Single binary : https://github.com/wabuntu/domlist/tree/main/binaries
 - Cargo : `cargo install domlist`
 
-# run
+# Run
 
 Please have your ssh-agent ready before you run.
 
@@ -16,7 +16,7 @@ $ eval `ssh-agent`
 $ ssh-add ~/.ssh/id_rsa
 ```
 
-## sample (remote)
+## Run against remote compute node
 
 ```
 user@desktop:~$ domlist computenode01.example.com
@@ -29,7 +29,7 @@ user@desktop:~$ domlist computenode01.example.com
 +--------------------+-----------------+---------+--------+--------+--------+---------+
 ```
 
-## sample (local)
+## Run in local
 ```
 user@computenode01:~$ domlist
 +--------------------+-----------------+---------+--------+--------+--------+---------+
