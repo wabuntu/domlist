@@ -1,7 +1,7 @@
 //! domlist
 //! # domlist
 //!
-//! domlist collects stat infomation from virsh. Mainly for OpenStack admin.
+//! domlist collects stat information from virsh. Mainly for OpenStack admin.
 
 /*
 TODO: forllow this guide
@@ -46,7 +46,7 @@ struct VMStats {
     capacity: i64,
 }
 
-/// SSH sender impletemted with SSH2
+/// SSH sender implemented with SSH2
 fn run_ssh(user: &str, host: &str, cmd: &str) -> String {
     let tcp = TcpStream::connect(host).expect("Failed to connect");
     let mut ssn = Session::new().expect("Failed to create a new session");
@@ -113,7 +113,7 @@ fn main() {
             continue;
         }
 
-        // Sprit A.B.C=xxxx
+        // Split A.B.C=xxxx
         let keyvalue: Vec<&str> = line.split('=').collect();
         let key: Vec<&str> = keyvalue[0].split('.').collect();
         let value = keyvalue[1].parse::<i64>().unwrap();
@@ -198,7 +198,7 @@ fn main() {
         };
     }
 
-    // Coloring red for top resource comsumer
+    // Coloring red for top resource consumer
     table.column_iter_mut(2).for_each(|column| {
         if column.get_content() == (cpu_top / GIGA).to_string() {
             column.style(Attr::ForegroundColor(color::RED));
