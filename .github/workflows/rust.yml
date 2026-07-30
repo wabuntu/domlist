@@ -55,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: domlist-${{ matrix.os }}
-          path: binaries/${{ matrix.os }}/release/domlist
+          path: binaries/${{ matrix.os }}/release/domlist${{ matrix.os == 'windows-latest' && '.exe' || '' }}
 
   push-binaries:
     name: Push binaries
@@ -85,7 +85,7 @@ jobs:
           git config user.email github-actions@github.com
           git add -f binaries/ubuntu-latest/release/domlist
           git add -f binaries/macos-latest/release/domlist
-          git add -f binaries/windows-latest/release/domlist
+          git add -f binaries/windows-latest/release/domlist.exe
           git commit -m 'uploading binaries'
           git push
 
