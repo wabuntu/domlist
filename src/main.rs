@@ -224,8 +224,8 @@ fn run() -> Result<(), String> {
             },
             "block" => match *key.last().unwrap() {
                 "bytes" => vmstats_list[index].io += value,
-                "allocation" => vmstats_list[index].allocation = value,
-                "capacity" => vmstats_list[index].capacity = value,
+                "allocation" => vmstats_list[index].allocation += value,
+                "capacity" => vmstats_list[index].capacity += value,
                 _ => (),
             },
             "net" => {
