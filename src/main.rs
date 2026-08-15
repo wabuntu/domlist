@@ -9,7 +9,7 @@ https://github.com/rust-lang/style-team/blob/master/guide/guide.md
 */
 
 use clap::Parser;
-use ssh2::{CheckResult, KnownHostFileKind, Session};
+use ssh2::{CheckResult, KnownHostFileKind, MethodType, Session};
 use std::env;
 use std::io::Read;
 use std::net::TcpStream;
@@ -95,6 +95,15 @@ fn connect(user: &str, hostname: &str, port: u16) -> Result<Session, String> {
         .map_err(|e| format!("Failed to connect to {}:{}: {}", hostname, port, e))?;
     let mut ssn = Session::new().map_err(|e| format!("Failed to create SSH session: {}", e))?;
     ssn.set_tcp_stream(tcp);
+    // Match OpenSSH's default host key algorithm preference (ed25519 first) so we
+    // negotiate the same key type a normal `ssh` login already recorded in
+    // known_hosts, instead of libssh2's own default order (which prefers ECDSA and
+    // would otherwise look like a changed host key on every connection).
+    ssn.method_pref(
+        MethodType::HostKey,
+        "ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,rsa-sha2-512,rsa-sha2-256,ssh-rsa",
+    )
+    .map_err(|e| format!("Failed to set host key algorithm preference: {}", e))?;
     ssn.handshake()
         .map_err(|e| format!("SSH handshake with {} failed: {}", hostname, e))?;
     verify_host_key(&ssn, hostname)?;
