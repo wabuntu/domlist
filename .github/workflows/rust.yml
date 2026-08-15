@@ -63,6 +63,7 @@ jobs:
     needs: build-test
     steps:
       - uses: actions/checkout@v3
+      - uses: swatinem/rust-cache@v2
 
       - uses: actions/download-artifact@v4
         with:
@@ -79,6 +80,31 @@ jobs:
           name: domlist-windows-latest
           path: binaries/windows-latest/release
 
+      - name: Remove previously committed package files
+        run: git rm -rf --ignore-unmatch target/debian target/release/rpmbuild
+
+      - name: Install packaging tools
+        run: |
+          cargo install cargo-deb
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
+      - name: Build .deb package
+        run: cargo deb
+
+      - name: Build .rpm package
+        run: |
+          cargo build --release
+          VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          RPMTOP="$(pwd)/target/release/rpmbuild"
+          mkdir -p "$RPMTOP"/{SOURCES,SPECS,BUILD,RPMS,SRPMS,BUILDROOT}
+          STAGE=$(mktemp -d)
+          mkdir -p "$STAGE/domlist-$VERSION/usr/bin"
+          cp target/release/domlist "$STAGE/domlist-$VERSION/usr/bin/"
+          tar czf "$RPMTOP/SOURCES/domlist-$VERSION.tar.gz" -C "$STAGE" "domlist-$VERSION"
+          sed -e "s/@@VERSION@@/$VERSION/" -e "s/@@RELEASE@@/1/" .rpm/domlist.spec > "$RPMTOP/SPECS/domlist.spec"
+          rpmbuild --define "_topdir $RPMTOP" -bb "$RPMTOP/SPECS/domlist.spec"
+
       - name: Commit and push
         run: |
           git config user.name github-actions
@@ -86,7 +112,9 @@ jobs:
           git add -f binaries/ubuntu-latest/release/domlist
           git add -f binaries/macos-latest/release/domlist
           git add -f binaries/windows-latest/release/domlist.exe
-          git commit -m 'uploading binaries'
+          git add -f target/debian/*.deb
+          git add -f target/release/rpmbuild/RPMS/x86_64/*.rpm
+          git commit -m 'uploading binaries and packages'
           git push
 
   release-please:
