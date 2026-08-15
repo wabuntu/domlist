@@ -14,6 +14,7 @@ use std::env;
 use std::io::Read;
 use std::net::TcpStream;
 use std::path::Path;
+use std::process::ExitCode;
 
 #[macro_use]
 extern crate prettytable;
@@ -55,59 +56,94 @@ fn shell_quote(s: &str) -> String {
 /// Verify the remote host key against ~/.ssh/known_hosts to guard against MITM.
 /// Refuses to continue on a definite mismatch; only warns if the host is simply unknown,
 /// since requiring a prior manual `ssh` login for every target would be impractical here.
-fn verify_host_key(ssn: &Session, hostname: &str) {
-    let (key, _key_type) = ssn.host_key().expect("Failed to get host key from session");
+fn verify_host_key(ssn: &Session, hostname: &str) -> Result<(), String> {
+    let (key, _key_type) = ssn
+        .host_key()
+        .ok_or_else(|| "Failed to get host key from session".to_string())?;
 
-    let home = env::var("HOME").expect("$HOME is not set");
-    let mut known_hosts = ssn.known_hosts().expect("Failed to init known_hosts");
+    let home = env::var("HOME").map_err(|_| "$HOME is not set".to_string())?;
+    let mut known_hosts = ssn
+        .known_hosts()
+        .map_err(|e| format!("Failed to init known_hosts: {}", e))?;
     known_hosts
         .read_file(
             Path::new(&format!("{}/.ssh/known_hosts", home)),
             KnownHostFileKind::OpenSSH,
         )
-        .expect("Failed to read ~/.ssh/known_hosts");
+        .map_err(|e| format!("Failed to read ~/.ssh/known_hosts: {}", e))?;
 
     match known_hosts.check(hostname, key) {
-        CheckResult::Match => {}
+        CheckResult::Match => Ok(()),
         CheckResult::NotFound => {
             eprintln!(
                 "Warning: {} is not in ~/.ssh/known_hosts; its identity could not be verified.",
                 hostname
             );
+            Ok(())
         }
-        CheckResult::Mismatch => {
-            panic!(
-                "Host key for {} does NOT match ~/.ssh/known_hosts! Refusing to connect (possible MITM).",
-                hostname
-            );
-        }
-        CheckResult::Failure => panic!("Failed to check host key for {}", hostname),
+        CheckResult::Mismatch => Err(format!(
+            "Host key for {} does NOT match ~/.ssh/known_hosts! Refusing to connect (possible MITM).",
+            hostname
+        )),
+        CheckResult::Failure => Err(format!("Failed to check host key for {}", hostname)),
     }
 }
 
-/// SSH sender implemented with SSH2
-fn run_ssh(user: &str, hostname: &str, port: u16, cmd: &str) -> String {
-    let tcp = TcpStream::connect((hostname, port)).expect("Failed to connect");
-    let mut ssn = Session::new().expect("Failed to create a new session");
+/// Open one authenticated SSH session, to be reused for every command that needs to run.
+fn connect(user: &str, hostname: &str, port: u16) -> Result<Session, String> {
+    let tcp = TcpStream::connect((hostname, port))
+        .map_err(|e| format!("Failed to connect to {}:{}: {}", hostname, port, e))?;
+    let mut ssn = Session::new().map_err(|e| format!("Failed to create SSH session: {}", e))?;
     ssn.set_tcp_stream(tcp);
-    ssn.handshake().expect("Failed at TCP handshake");
-    verify_host_key(&ssn, hostname);
+    ssn.handshake()
+        .map_err(|e| format!("SSH handshake with {} failed: {}", hostname, e))?;
+    verify_host_key(&ssn, hostname)?;
     ssn.userauth_agent(user)
-        .expect("Failed to have user auth agent");
-    assert!(ssn.authenticated());
-
-    let mut channel = ssn.channel_session().expect("Failed to create a channel");
-    channel
-        .exec(cmd)
-        .expect("Failed to run command through SSH");
-    let mut result = String::new();
-    channel
-        .read_to_string(&mut result)
-        .expect("Failed to read the result");
-    return result;
+        .map_err(|e| format!("SSH agent auth for {} failed: {}", user, e))?;
+    if !ssn.authenticated() {
+        return Err(format!("SSH authentication as {} was not accepted", user));
+    }
+    Ok(ssn)
 }
 
-fn main() {
+/// Run a command over an already-connected session and return its stdout.
+/// Fails with the remote command's stderr if it exits non-zero.
+fn exec(ssn: &Session, cmd: &str) -> Result<String, String> {
+    let mut channel = ssn
+        .channel_session()
+        .map_err(|e| format!("Failed to open channel: {}", e))?;
+    channel
+        .exec(cmd)
+        .map_err(|e| format!("Failed to run command over SSH: {}", e))?;
+
+    let mut stdout = String::new();
+    channel
+        .read_to_string(&mut stdout)
+        .map_err(|e| format!("Failed to read command output: {}", e))?;
+    let mut stderr = String::new();
+    channel
+        .stderr()
+        .read_to_string(&mut stderr)
+        .map_err(|e| format!("Failed to read command stderr: {}", e))?;
+    channel
+        .wait_close()
+        .map_err(|e| format!("Failed to close channel: {}", e))?;
+
+    let status = channel
+        .exit_status()
+        .map_err(|e| format!("Failed to get exit status: {}", e))?;
+    if status != 0 {
+        return Err(format!(
+            "Remote command exited with status {}: {}\ncommand: {}",
+            status,
+            stderr.trim(),
+            cmd
+        ));
+    }
+    Ok(stdout)
+}
+
+fn run() -> Result<(), String> {
     const GIGA: i64 = 1000000000;
     const MEGA: i64 = 1000000;
     let mut vmstats_list: Vec<VMStats> = vec![];
@@ -116,17 +152,19 @@ fn main() {
     let args = Args::parse();
     let host: String = args.host.clone().unwrap_or(String::from("127.0.0.1"));
     let port: u16 = 22;
-    let user: String = env::var("USER").expect("$USER is not set");
+    let user: String = env::var("USER").map_err(|_| "$USER is not set".to_string())?;
     //println!(r"Connecting... : {}@{}", user, host);
 
+    let ssn = connect(&user, &host, port)?;
+
     // Run 'virsh domstats' in target node
-    let mut cmd: String = format!(
+    let cmd: String = format!(
         "{} {} {}",
         "sudo virsh domstats",
         "--cpu-total --balloon --interface --block",
         "| grep -e Domain: -e cpu.time -e balloon -e bytes -e allocation -e capacity"
     );
-    let domstats: String = run_ssh(&user, &host, port, &cmd);
+    let domstats: String = exec(&ssn, &cmd)?;
     let mut index = 0;
     let mut domain_list: String = "".to_string();
 
@@ -137,8 +175,15 @@ fn main() {
         // Extract domain name from virsh command result
         if line.contains("Domain: ") {
             let domain: Vec<&str> = line.split('\'').collect();
+            let domain_name = match domain.get(1) {
+                Some(name) => *name,
+                None => {
+                    eprintln!("Warning: could not parse domain name from line: {}", line);
+                    continue;
+                }
+            };
             let vmstats = VMStats {
-                domain: domain[1].to_string(),
+                domain: domain_name.to_string(),
                 instance: "".to_string(),
                 cpu: 0,
                 mem_cur: 0,
@@ -150,14 +195,20 @@ fn main() {
             };
             vmstats_list.push(vmstats);
             index = vmstats_list.len() - 1;
-            domain_list += format!(" {}", shell_quote(domain[1])).as_str();
+            domain_list += format!(" {}", shell_quote(domain_name)).as_str();
             continue;
         }
 
         // Split A.B.C=xxxx
         let keyvalue: Vec<&str> = line.split('=').collect();
+        if keyvalue.len() < 2 {
+            continue;
+        }
         let key: Vec<&str> = keyvalue[0].split('.').collect();
-        let value = keyvalue[1].parse::<i64>().unwrap();
+        let value = match keyvalue[1].parse::<i64>() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
 
         // Collect data for cpu, memory, block, net
         match key[0] {
@@ -190,7 +241,7 @@ fn main() {
     // Emit one "domain|instance" line per domain (instance may be empty when the
     // domain has no nova:name, e.g. a non-OpenStack guest) so results can be matched
     // back by domain name instead of assuming both commands return the same line count.
-    cmd = format!(
+    let cmd = format!(
         "{} {} {} {} {} {}",
         "for DOMAIN in",
         domain_list,
@@ -199,7 +250,7 @@ fn main() {
         r#"echo "${DOMAIN}|${NAME}";"#,
         "done;"
     );
-    let instances = run_ssh(user.as_str(), host.as_str(), port, &cmd);
+    let instances = exec(&ssn, &cmd)?;
     for line in instances.lines() {
         if let Some((domain, instance)) = line.trim().split_once('|') {
             if let Some(vmstats) = vmstats_list.iter_mut().find(|v| v.domain == domain) {
@@ -251,4 +302,16 @@ fn main() {
         }
     }
     table.printstd();
+
+    Ok(())
+}
+
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            ExitCode::FAILURE
+        }
+    }
 }
