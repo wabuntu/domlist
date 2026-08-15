@@ -9,10 +9,11 @@ https://github.com/rust-lang/style-team/blob/master/guide/guide.md
 */
 
 use clap::Parser;
-use ssh2::Session;
+use ssh2::{CheckResult, KnownHostFileKind, Session};
 use std::env;
 use std::io::Read;
 use std::net::TcpStream;
+use std::path::Path;
 
 #[macro_use]
 extern crate prettytable;
@@ -46,12 +47,51 @@ struct VMStats {
     capacity: i64,
 }
 
+/// Quote a string so it can be safely embedded as a single word in a shell command
+fn shell_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', r"'\''"))
+}
+
+/// Verify the remote host key against ~/.ssh/known_hosts to guard against MITM.
+/// Refuses to continue on a definite mismatch; only warns if the host is simply unknown,
+/// since requiring a prior manual `ssh` login for every target would be impractical here.
+fn verify_host_key(ssn: &Session, hostname: &str) {
+    let (key, _key_type) = ssn.host_key().expect("Failed to get host key from session");
+
+    let home = env::var("HOME").expect("$HOME is not set");
+    let mut known_hosts = ssn.known_hosts().expect("Failed to init known_hosts");
+    known_hosts
+        .read_file(
+            Path::new(&format!("{}/.ssh/known_hosts", home)),
+            KnownHostFileKind::OpenSSH,
+        )
+        .expect("Failed to read ~/.ssh/known_hosts");
+
+    match known_hosts.check(hostname, key) {
+        CheckResult::Match => {}
+        CheckResult::NotFound => {
+            eprintln!(
+                "Warning: {} is not in ~/.ssh/known_hosts; its identity could not be verified.",
+                hostname
+            );
+        }
+        CheckResult::Mismatch => {
+            panic!(
+                "Host key for {} does NOT match ~/.ssh/known_hosts! Refusing to connect (possible MITM).",
+                hostname
+            );
+        }
+        CheckResult::Failure => panic!("Failed to check host key for {}", hostname),
+    }
+}
+
 /// SSH sender implemented with SSH2
-fn run_ssh(user: &str, host: &str, cmd: &str) -> String {
-    let tcp = TcpStream::connect(host).expect("Failed to connect");
+fn run_ssh(user: &str, hostname: &str, port: u16, cmd: &str) -> String {
+    let tcp = TcpStream::connect((hostname, port)).expect("Failed to connect");
     let mut ssn = Session::new().expect("Failed to create a new session");
     ssn.set_tcp_stream(tcp);
     ssn.handshake().expect("Failed at TCP handshake");
+    verify_host_key(&ssn, hostname);
     ssn.userauth_agent(user)
         .expect("Failed to have user auth agent");
     assert!(ssn.authenticated());
@@ -74,7 +114,8 @@ fn main() {
 
     // Get target node, port, user
     let args = Args::parse();
-    let host: String = args.host.clone().unwrap_or(String::from("127.0.0.1")) + ":22";
+    let host: String = args.host.clone().unwrap_or(String::from("127.0.0.1"));
+    let port: u16 = 22;
     let user: String = env::var("USER").expect("$USER is not set");
     //println!(r"Connecting... : {}@{}", user, host);
 
@@ -85,7 +126,7 @@ fn main() {
         "--cpu-total --balloon --interface --block",
         "| grep -e Domain: -e cpu.time -e balloon -e bytes -e allocation -e capacity"
     );
-    let domstats: String = run_ssh( &user, &host, &cmd);
+    let domstats: String = run_ssh(&user, &host, port, &cmd);
     let mut index = 0;
     let mut domain_list: String = "".to_string();
 
@@ -109,7 +150,7 @@ fn main() {
             };
             vmstats_list.push(vmstats);
             index = vmstats_list.len() - 1;
-            domain_list += format!(" {}", domain[1]).as_str();
+            domain_list += format!(" {}", shell_quote(domain[1])).as_str();
             continue;
         }
 
@@ -145,22 +186,26 @@ fn main() {
         }
     }
 
-    // Get instance name from domain name
+    // Get instance name from domain name.
+    // Emit one "domain|instance" line per domain (instance may be empty when the
+    // domain has no nova:name, e.g. a non-OpenStack guest) so results can be matched
+    // back by domain name instead of assuming both commands return the same line count.
     cmd = format!(
         "{} {} {} {} {} {}",
         "for DOMAIN in",
         domain_list,
-        "; do ",
-        "sudo virsh dumpxml ${DOMAIN}",
-        "| grep nova:name | sed -r 's/<nova:name>(.*)<\\/nova:name>/\\1/';",
+        "; do",
+        r#"NAME=$(sudo virsh dumpxml "${DOMAIN}" | grep nova:name | sed -r 's/<nova:name>(.*)<\/nova:name>/\1/');"#,
+        r#"echo "${DOMAIN}|${NAME}";"#,
         "done;"
     );
-    let instances = run_ssh(user.as_str(), host.as_str(), &cmd);
-    let mut index = 0;
-    for instance in instances.lines() {
-        let instance = instance.trim();
-        vmstats_list[index].instance = instance.to_string();
-        index += 1;
+    let instances = run_ssh(user.as_str(), host.as_str(), port, &cmd);
+    for line in instances.lines() {
+        if let Some((domain, instance)) = line.trim().split_once('|') {
+            if let Some(vmstats) = vmstats_list.iter_mut().find(|v| v.domain == domain) {
+                vmstats.instance = instance.to_string();
+            }
+        }
     }
 
     // Print table
@@ -170,13 +215,15 @@ fn main() {
         row![bc => "Domain", "Instance", "CPU(G)", "MEM(G)", "I/O(G)","NET(G)", "Disk(G)"],
     );
 
-    let mut cpu_top: i64 = 0;
-    let mut io_top: i64 = 0;
-    let mut net_top: i64 = 0;
+    // Determine top resource consumers from raw values before rendering, so highlighting
+    // can't be fooled by two different raw values truncating to the same displayed number.
+    let cpu_top: i64 = vmstats_list.iter().map(|v| v.cpu).max().unwrap_or(0);
+    let io_top: i64 = vmstats_list.iter().map(|v| v.io).max().unwrap_or(0);
+    let net_top: i64 = vmstats_list.iter().map(|v| v.net).max().unwrap_or(0);
 
     // Adding table row
     for vmstats in &vmstats_list {
-        table.add_row(row![
+        let row = table.add_row(row![
             vmstats.domain,
             vmstats.instance,
             r->(vmstats.cpu/GIGA).to_string(),
@@ -186,33 +233,22 @@ fn main() {
             r->format!("{}/{}", (vmstats.allocation/GIGA).to_string(),(vmstats.capacity/GIGA).to_string()),
         ]);
 
-        // Record top resource consumer
-        if vmstats.cpu > cpu_top {
-            cpu_top = vmstats.cpu
-        };
-        if vmstats.io > io_top {
-            io_top = vmstats.io
-        };
-        if vmstats.net > net_top {
-            net_top = vmstats.net
-        };
+        // Coloring red for top resource consumer (compared on raw values, not display text)
+        if vmstats.cpu == cpu_top {
+            row.get_mut_cell(2)
+                .unwrap()
+                .style(Attr::ForegroundColor(color::RED));
+        }
+        if vmstats.io == io_top {
+            row.get_mut_cell(4)
+                .unwrap()
+                .style(Attr::ForegroundColor(color::RED));
+        }
+        if vmstats.net == net_top {
+            row.get_mut_cell(5)
+                .unwrap()
+                .style(Attr::ForegroundColor(color::RED));
+        }
     }
-
-    // Coloring red for top resource consumer
-    table.column_iter_mut(2).for_each(|column| {
-        if column.get_content() == (cpu_top / GIGA).to_string() {
-            column.style(Attr::ForegroundColor(color::RED));
-        }
-    });
-    table.column_iter_mut(4).for_each(|column| {
-        if column.get_content() == (io_top / GIGA).to_string() {
-            column.style(Attr::ForegroundColor(color::RED));
-        }
-    });
-    table.column_iter_mut(5).for_each(|column| {
-        if column.get_content() == (net_top / GIGA).to_string() {
-            column.style(Attr::ForegroundColor(color::RED));
-        }
-    });
     table.printstd();
 }
