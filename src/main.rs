@@ -221,11 +221,7 @@ fn run() -> Result<(), String> {
 
         // Collect data for cpu, memory, block, net
         match key[0] {
-            "cpu" => {
-                if *key.last().unwrap() == "time" {
-                    vmstats_list[index].cpu = value;
-                }
-            }
+            "cpu" if *key.last().unwrap() == "time" => vmstats_list[index].cpu = value,
             "balloon" => match *key.last().unwrap() {
                 "current" => vmstats_list[index].mem_cur = value,
                 "maximum" => vmstats_list[index].mem_max = value,
@@ -237,11 +233,7 @@ fn run() -> Result<(), String> {
                 "capacity" => vmstats_list[index].capacity += value,
                 _ => (),
             },
-            "net" => {
-                if *key.last().unwrap() == "bytes" {
-                    vmstats_list[index].net += value;
-                }
-            }
+            "net" if *key.last().unwrap() == "bytes" => vmstats_list[index].net += value,
             _ => (),
         }
     }
