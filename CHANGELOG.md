@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.7.6](https://github.com/wabuntu/domlist/compare/1.7.5...v1.7.6) (2026-08-18)
+## [1.7.8](https://github.com/wabuntu/domlist/compare/1.7.5...v1.7.8) (2026-08-18)
 
 
 ### Bug Fixes
