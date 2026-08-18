@@ -10,6 +10,8 @@ documentation = "https://docs.rs/domlist"
 description = """
 Collects stat infomation from virsh. Mainly for OpenStack admin.
 """
+categories = ["command-line-utilities"]
+keywords = ["openstack", "virsh", "libvirt", "ssh", "cli"]
 
 [dependencies]
 ssh2 = "0.9.4"
