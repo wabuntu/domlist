@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "domlist"
-version = "1.7.7"
+version = "1.7.6"
 dependencies = [
  "clap",
  "prettytable-rs",
