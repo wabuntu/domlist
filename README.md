@@ -1,7 +1,6 @@
 # domlist
 
 [![Crates.io](https://img.shields.io/crates/v/domlist.svg)](https://crates.io/crates/domlist)
-[![docs.rs](https://img.shields.io/docsrs/domlist)](https://docs.rs/domlist)
 [![CI](https://github.com/wabuntu/domlist/actions/workflows/rust.yml/badge.svg)](https://github.com/wabuntu/domlist/actions/workflows/rust.yml)
 
 Collects stat infomation from virsh. Mainly for OpenStack admin.
